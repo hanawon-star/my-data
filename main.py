@@ -7,7 +7,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # 웹페이지 기본 설정
 st.set_page_config(
-    page_title="서울 기온 다항 회귀(곡선) 예측 분석",
+    page_title="서울 기온 다항 회귀(곡선) 예측 모델",
     page_icon="🌡️",
     layout="wide"
 )
@@ -35,8 +35,12 @@ def load_data():
     
     df_valid = df[df['연도'].isin(valid_years)]
     
-    # 연도별 평균 기온 집계
-    yearly_df = df_valid.groupby('연도')['평균기온'].mean().reset_index().round(2)
+    # 연도별 평균 기온 집계 (열 이름을 '연평균기온'으로 명확히 지정)
+    yearly_df = df_valid.groupby('연도').agg(
+        연평균기온=('평균기온', 'mean'),
+        연평균최저기온=('최저기온', 'mean'),
+        연평균최고기온=('최고기온', 'mean')
+    ).reset_index().round(2)
     
     # 전체 연도 범위 정렬
     full_years = pd.DataFrame({'연도': range(int(yearly_df['연도'].min()), int(yearly_df['연도'].max()) + 1)})
@@ -129,8 +133,8 @@ try:
     # 과적합(Overfitting) 인사이트
     st.warning(
         f"💡 **분석 포인트 (오버피팅 관찰)**:\n"
-        f"- **1차(직선) / 3차 곡선**: 훈련 데이터의 완만한 상승 추세를 적절히 반영하여 테스트 데이터에서도 약 **{eval_results[0]['테스트 MAE (평균 오차)']} ~ {eval_results[1]['테스트 MAE (평균 오차)']}** 수준으로 안정적 오차를 유지합니다.\n"
-        f"- **9차 곡선**: 훈련 데이터의 세부 파동에 지나치게 적응(오버피팅)하여, 2005년 이후 미래 구역으로 벗어나는 순간 예측값이 극단적으로 **{eval_results[2]['2050년 예상 기온']}**까지 발산(비현실적 폭주)합니다."
+        f"- **1차(직선) / 3차 곡선**: 훈련 데이터의 완만한 상승 추세를 적절히 반영하여 테스트 데이터에서도 평균 오차가 약 **{eval_results[0]['테스트 MAE (평균 오차)']} ~ {eval_results[1]['테스트 MAE (평균 오차)']}** 수준으로 안정적입니다.\n"
+        f"- **9차 곡선**: 훈련 데이터의 국소적 노이즈에 과도하게 맞추어져(오버피팅), 학습 영역을 벗어나는 순간 예측치가 **{eval_results[2]['2050년 예상 기온']}**로 비현실적 폭주를 보입니다."
     )
 
     st.markdown("---")
@@ -140,7 +144,7 @@ try:
     # ==========================================
     st.subheader("📈 다항 회귀선 시각화 (1908년 ~ 2050년)")
     
-    # 1908년부터 2050년까지 촘촘한 연속 연도 축 생성
+    # 연속 연도 축 생성 (1908~2050)
     x_range_years = np.linspace(int(valid_df['연도'].min()), 2050, 400)
     x_range_scaled = x_range_years - base_year
     
@@ -167,7 +171,6 @@ try:
     for deg in degrees:
         y_curve = models[deg](x_range_scaled)
         
-        # 9차 곡선 폭주 시 Y축 표시 범위를 벗어날 수 있으므로 가독성을 보장
         fig.add_trace(go.Scatter(
             x=x_range_years, y=y_curve,
             mode='lines',
@@ -175,7 +178,6 @@ try:
             line=dict(color=colors[deg], width=2.5, dash=line_styles[deg])
         ))
         
-    # Y축 범위 가독성 제한 (비현실적 9차 발산 시 차트 깨짐 방지)
     fig.update_layout(
         title={'text': "훈련/테스트 데이터와 차수별(1차, 3차, 9차) 예측 곡선 비교", 'x': 0.5, 'xanchor': 'center'},
         xaxis_title="연도",
